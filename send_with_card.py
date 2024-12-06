@@ -8,6 +8,11 @@ from atproto import Client, client_utils, models
 _META_PATTERN = re.compile(r'<meta property="og:.*?>')
 _CONTENT_PATTERN = re.compile(r'<meta[^>]+content="([^"]+)"')
 
+def login(handle, password):
+    client = Client()
+    profile = client.login(handle, password)
+    print('Logged in as ', profile.display_name)
+    return client
 
 def _find_tag(og_tags: t.List[str], search_tag: str) -> t.Optional[str]:
     for tag in og_tags:
@@ -76,7 +81,7 @@ def main():
 
     link = "https://github.com/omiq/bluesky"
     text = "I think I will work on a #WordPress plugin that posts newly published articles (after a short delay). Will add to my repo here any experiments I make: "
-    result = send_rich_post(client, url, text)
+    result = send_rich_post(client, link, text)
     print(result)
 
 if __name__ == '__main__':
