@@ -9,9 +9,12 @@ def login(handle, password):
     print('Logged in as ', profile.display_name)
     return client
 
-def post(client, message):
+def post(client, message, anchortext='', link=''):
 
-    text = client_utils.TextBuilder().text(message) #.link('Python SDK', 'https://atproto.blue')
+    if link !='':
+        text = client_utils.TextBuilder().text(message).link(anchortext, link)
+    else:
+        text = client_utils.TextBuilder().text(message)
     post = client.send_post(text)
     return post
 
@@ -59,12 +62,15 @@ if __name__ == '__main__':
     password = sys.argv[2]
     client = login(handle, password)
 
-    # result = post(client, "Another test of the API, will delete")
+    link = "https://github.com/omiq/bluesky"
+    result = post(client, "I think I will work on a #WordPress plugin that posts newly published articles (after a short delay). Will add to my repo here any experiments I make: ", "Github", link)
+    print(result)
+    
     # print(client.get_author_feed)
     # post_image(client, "Kara", "./kara.jpg")
     feed = get_user_feed(client, "chrisg.com")
     #for post in feed:
     post = feed[0]
-    if(post.post.record.reply==None):
+    if(post.post.record.reply==None & post.post.embed != None):
         print('\n\n', post.post.record.text, post.post.embed.images[0].fullsize, post.post.embed.images[0].alt)
 
