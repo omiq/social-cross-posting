@@ -66,8 +66,18 @@ def send_rich_post(client, url, text):
     return result
 
 def main():
-  
-  send_rich_post(client, url, text)
+    if len(sys.argv) < 3:
+        print("Please provide handle and password")
+        sys.exit(1)
+        
+    handle = sys.argv[1]
+    password = sys.argv[2]
+    client = login(handle, password)
+
+    link = "https://github.com/omiq/bluesky"
+    text = "I think I will work on a #WordPress plugin that posts newly published articles (after a short delay). Will add to my repo here any experiments I make: "
+    result = send_rich_post(client, url, text)
+    print(result)
 
 if __name__ == '__main__':
     main()
