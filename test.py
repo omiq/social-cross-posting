@@ -20,6 +20,14 @@ def get_size(imagefile):
     img = Image.open(imagefile) 
     return img.width, img.height 
 
+def get_user_feed(client, handle):
+
+    print(f'\nProfile Posts of {handle}:\n\n')
+
+    # Get profile's posts. Use pagination (cursor + limit) to fetch all
+    profile_feed = client.get_author_feed(actor=handle)
+    return profile_feed.feed
+
 def post_image(client, text, imagefile, alt_text=''):
 
     # the path to our image file
@@ -50,8 +58,13 @@ if __name__ == '__main__':
     handle = sys.argv[1]
     password = sys.argv[2]
     client = login(handle, password)
+
     # result = post(client, "Another test of the API, will delete")
     # print(client.get_author_feed)
-    post_image(client, "Kara", "./kara.jpg")
+    # post_image(client, "Kara", "./kara.jpg")
+    feed = get_user_feed(client, "chrisg.com")
+    #for post in feed:
+    post = feed[0]
+    if(post.post.record.reply==None):
+        print('\n\n', post.post.record.text, post.post.embed.images[0].fullsize, post.post.embed.images[0].alt)
 
-    
