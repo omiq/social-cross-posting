@@ -1,8 +1,9 @@
 import re
-import typing as t
-
+import sys
 import httpx
-from atproto import Client, models
+import typing as t
+from PIL import Image 
+from atproto import Client, client_utils, models
 
 _META_PATTERN = re.compile(r'<meta property="og:.*?>')
 _CONTENT_PATTERN = re.compile(r'<meta[^>]+content="([^"]+)"')
