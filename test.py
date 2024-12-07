@@ -1,7 +1,7 @@
 import sys
 from PIL import Image 
-from atproto import Client, client_utils
-from atproto import Client, models
+from atproto import Client, client_utils, models
+
 
 def login(handle, password):
     client = Client()
