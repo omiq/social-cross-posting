@@ -13,6 +13,8 @@ import json
 from dotenv import load_dotenv
 from urllib.parse import urlencode
 import webbrowser
+from bs4 import BeautifulSoup
+import mimetypes
 
 # Load environment variables
 load_dotenv()
@@ -54,16 +56,15 @@ class SocialMediaPoster:
         # Facebook
         try:
             FacebookAdsApi.init(access_token=self._get_env_var('FACEBOOK_ACCESS_TOKEN'))
-            self.clients['facebook'] = FacebookAdsApi.get_instance()
+            self.clients['facebook'] = FacebookAdsApi()
         except Exception as e:
             print(f"Failed to initialize Facebook client: {e}")
 
         # LinkedIn
         try:
             self.clients['linkedin'] = Linkedin(
-                client_id=self._get_env_var('LINKEDIN_CLIENT_ID'),
-                client_secret=self._get_env_var('LINKEDIN_CLIENT_SECRET'),
-                access_token=self._get_env_var('LINKEDIN_ACCESS_TOKEN')
+                username=self._get_env_var('LINKEDIN_USERNAME'),
+                password=self._get_env_var('LINKEDIN_PASSWORD')
             )
         except Exception as e:
             print(f"Failed to initialize LinkedIn client: {e}")
@@ -86,95 +87,13 @@ class SocialMediaPoster:
         except Exception as e:
             print(f"Failed to initialize Threads client: {e}")
 
-    @staticmethod
-    def get_linkedin_auth_url(client_id: str, redirect_uri: str) -> str:
-        """
-        Generate LinkedIn OAuth URL for user authentication
-        
-        Args:
-            client_id: LinkedIn client ID
-            redirect_uri: Redirect URI after authentication
-            
-        Returns:
-            OAuth URL
-        """
-        params = {
-            'response_type': 'code',
-            'client_id': client_id,
-            'redirect_uri': redirect_uri,
-            'scope': 'r_liteprofile r_emailaddress w_member_social',
-            'state': 'random_state_string'  # In production, use a secure random string
-        }
-        return f"https://www.linkedin.com/oauth/v2/authorization?{urlencode(params)}"
-
-    @staticmethod
-    def get_facebook_auth_url(client_id: str, redirect_uri: str) -> str:
-        """
-        Generate Facebook OAuth URL for user authentication
-        
-        Args:
-            client_id: Facebook client ID
-            redirect_uri: Redirect URI after authentication
-            
-        Returns:
-            OAuth URL
-        """
-        params = {
-            'client_id': client_id,
-            'redirect_uri': redirect_uri,
-            'scope': 'pages_manage_posts,pages_read_engagement,publish_to_groups',
-            'response_type': 'code',
-            'state': 'random_state_string'  # In production, use a secure random string
-        }
-        return f"https://www.facebook.com/v12.0/dialog/oauth?{urlencode(params)}"
-
-    def authenticate_linkedin(self, client_id: str, client_secret: str, redirect_uri: str):
-        """
-        Authenticate with LinkedIn using OAuth flow
-        
-        Args:
-            client_id: LinkedIn client ID
-            client_secret: LinkedIn client secret
-            redirect_uri: Redirect URI after authentication
-        """
-        auth_url = self.get_linkedin_auth_url(client_id, redirect_uri)
-        print(f"Please visit this URL to authenticate with LinkedIn: {auth_url}")
-        webbrowser.open(auth_url)
-        
-        # In a real application, you would handle the redirect and get the code
-        # For this example, we'll just print instructions
-        print("\nAfter authenticating, you'll be redirected to your redirect_uri with a code parameter.")
-        print("Use that code to get your access token and update your .env file.")
-
-    def authenticate_facebook(self, client_id: str, client_secret: str, redirect_uri: str):
-        """
-        Authenticate with Facebook using OAuth flow
-        
-        Args:
-            client_id: Facebook client ID
-            client_secret: Facebook client secret
-            redirect_uri: Redirect URI after authentication
-        """
-        auth_url = self.get_facebook_auth_url(client_id, redirect_uri)
-        print(f"Please visit this URL to authenticate with Facebook: {auth_url}")
-        webbrowser.open(auth_url)
-        
-        # In a real application, you would handle the redirect and get the code
-        # For this example, we'll just print instructions
-        print("\nAfter authenticating, you'll be redirected to your redirect_uri with a code parameter.")
-        print("Use that code to get your access token and update your .env file.")
+    def _get_image_size(self, image_path: str) -> tuple:
+        """Get image dimensions"""
+        with Image.open(image_path) as img:
+            return img.size
 
     def post_text(self, text: str, platforms: Optional[List[str]] = None) -> Dict[str, Any]:
-        """
-        Post text content to specified platforms
-        
-        Args:
-            text: The text content to post
-            platforms: List of platform names to post to. If None, posts to all initialized platforms.
-            
-        Returns:
-            Dictionary containing results from each platform
-        """
+        """Post text content to specified platforms"""
         if platforms is None:
             platforms = list(self.clients.keys())
             
@@ -209,7 +128,7 @@ class SocialMediaPoster:
                     results['instagram'] = {'error': 'Text-only posts not supported'}
                 elif platform == 'threads':
                     # Threads supports text-only posts
-                    results['threads'] = self.clients['threads'].post_text(text)
+                    results['threads'] = self.clients['threads'].post_direct_message(text)
             except Exception as e:
                 results[platform] = {'error': str(e)}
                 
@@ -217,35 +136,27 @@ class SocialMediaPoster:
 
     def post_image(self, text: str, image_path: str, alt_text: str = '', 
                   platforms: Optional[List[str]] = None) -> Dict[str, Any]:
-        """
-        Post image with caption to specified platforms
-        
-        Args:
-            text: The caption text
-            image_path: Path to the image file
-            alt_text: Alt text for accessibility
-            platforms: List of platform names to post to. If None, posts to all initialized platforms.
-            
-        Returns:
-            Dictionary containing results from each platform
-        """
+        """Post image with caption to specified platforms"""
         if platforms is None:
             platforms = list(self.clients.keys())
             
         results = {}
         
+        # Get image dimensions
+        width, height = self._get_image_size(image_path)
+        
         # Read image file
         with open(image_path, 'rb') as f:
             image_data = f.read()
             
+        # Get mime type
+        mime_type = mimetypes.guess_type(image_path)[0]
+        if not mime_type or not mime_type.startswith('image/'):
+            mime_type = 'image/jpeg'
+            
         for platform in platforms:
             try:
                 if platform == 'bluesky':
-                    # Get image dimensions
-                    img = Image.open(image_path)
-                    width, height = img.size
-                    
-                    # Upload image
                     results['bluesky'] = self.clients['bluesky'].send_image(
                         text=text,
                         image=image_data,
@@ -256,6 +167,7 @@ class SocialMediaPoster:
                     # Upload media first
                     media = self.clients['mastodon'].media_post(
                         image_data,
+                        mime_type=mime_type,
                         description=alt_text
                     )
                     # Then post with media
@@ -283,23 +195,22 @@ class SocialMediaPoster:
                         }
                     )
                 elif platform == 'linkedin':
-                    # LinkedIn requires image to be uploaded first
                     results['linkedin'] = self.clients['linkedin'].post(
                         text=text,
                         image_path=image_path,
                         visibility='PUBLIC'
                     )
                 elif platform == 'instagram':
-                    # Instagram requires image to be uploaded first
                     results['instagram'] = self.clients['instagram'].post_photo(
                         image_path,
-                        caption=text
+                        caption=text,
+                        size=(width, height)
                     )
                 elif platform == 'threads':
-                    # Threads uses Instagram API
                     results['threads'] = self.clients['threads'].post_photo(
                         image_path,
-                        caption=text
+                        caption=text,
+                        size=(width, height)
                     )
             except Exception as e:
                 results[platform] = {'error': str(e)}
@@ -307,17 +218,7 @@ class SocialMediaPoster:
         return results
 
     def post_link(self, text: str, url: str, platforms: Optional[List[str]] = None) -> Dict[str, Any]:
-        """
-        Post link with text to specified platforms
-        
-        Args:
-            text: The text content
-            url: The URL to link to
-            platforms: List of platform names to post to. If None, posts to all initialized platforms.
-            
-        Returns:
-            Dictionary containing results from each platform
-        """
+        """Post link with text to specified platforms"""
         if platforms is None:
             platforms = list(self.clients.keys())
             
@@ -376,9 +277,7 @@ class SocialMediaPoster:
                     results['instagram'] = {'error': 'Link posts not supported'}
                 elif platform == 'threads':
                     # Threads supports clickable links
-                    results['threads'] = self.clients['threads'].post_text(
-                        text=f"{text}\n\n{url}"
-                    )
+                    results['threads'] = self.clients['threads'].post_direct_message(f"{text}\n\n{url}")
             except Exception as e:
                 results[platform] = {'error': str(e)}
                 
