@@ -204,9 +204,12 @@ class SocialMediaPoster:
                         text=text,
                         visibility='PUBLIC'
                     )
-                elif platform in ['instagram', 'threads']:
-                    # Instagram and Threads don't support text-only posts
-                    results[platform] = {'error': 'Text-only posts not supported'}
+                elif platform == 'instagram':
+                    # Instagram doesn't support text-only posts
+                    results['instagram'] = {'error': 'Text-only posts not supported'}
+                elif platform == 'threads':
+                    # Threads supports text-only posts
+                    results['threads'] = self.clients['threads'].post_text(text)
             except Exception as e:
                 results[platform] = {'error': str(e)}
                 
@@ -368,9 +371,14 @@ class SocialMediaPoster:
                         text=f"{text}\n\n{url}",
                         visibility='PUBLIC'
                     )
-                elif platform in ['instagram', 'threads']:
-                    # Instagram and Threads don't support clickable links in posts
-                    results[platform] = {'error': 'Link posts not supported'}
+                elif platform == 'instagram':
+                    # Instagram doesn't support clickable links in posts
+                    results['instagram'] = {'error': 'Link posts not supported'}
+                elif platform == 'threads':
+                    # Threads supports clickable links
+                    results['threads'] = self.clients['threads'].post_text(
+                        text=f"{text}\n\n{url}"
+                    )
             except Exception as e:
                 results[platform] = {'error': str(e)}
                 

@@ -117,8 +117,9 @@ poster.post_link(
 
 ## Platform Limitations
 
-- Instagram and Threads don't support text-only posts
-- Instagram and Threads don't support clickable links in posts
+- Instagram doesn't support text-only posts
+- Instagram doesn't support clickable links in posts
+- Threads supports both text-only posts and clickable links
 - Some platforms may have rate limits or other restrictions
 
 ## License
