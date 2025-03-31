@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Media Poster</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 800px;
+            margin-top: 2rem;
+        }
+        .card {
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #80bdff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        }
+        .btn-primary {
+            background-color: #007bff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem 1.5rem;
+        }
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+        .platform-switch {
+            margin-bottom: 1rem;
+        }
+        #imagePreview {
+            max-width: 100%;
+            max-height: 300px;
+            margin-top: 1rem;
+            display: none;
+        }
+        .status {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 8px;
+            display: none;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="card-title mb-4">Social Media Poster</h2>
+                
+                <form id="postForm">
+                    <!-- Text Input -->
+                    <div class="mb-3">
+                        <label for="text" class="form-label">Post Text</label>
+                        <textarea class="form-control" id="text" name="text" rows="4" required></textarea>
+                    </div>
+                    
+                    <!-- Link Input -->
+                    <div class="mb-3">
+                        <label for="link" class="form-label">Optional Link</label>
+                        <input type="url" class="form-control" id="link" name="link" placeholder="https://...">
+                    </div>
+                    
+                    <!-- Image Upload -->
+                    <div class="mb-3">
+                        <label for="image" class="form-label">Optional Image</label>
+                        <input type="file" class="form-control" id="image" name="image" accept="image/*">
+                        <img id="imagePreview" class="img-fluid">
+                    </div>
+                    
+                    <!-- Platform Selection -->
+                    <div class="mb-3">
+                        <label class="form-label">Select Platforms</label>
+                        <div class="platform-switch">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="platforms" value="bluesky" id="bluesky">
+                                <label class="form-check-label" for="bluesky">Bluesky</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="platforms" value="mastodon" id="mastodon">
+                                <label class="form-check-label" for="mastodon">Mastodon</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="platforms" value="facebook" id="facebook">
+                                <label class="form-check-label" for="facebook">Facebook</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="platforms" value="linkedin" id="linkedin">
+                                <label class="form-check-label" for="linkedin">LinkedIn</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="platforms" value="instagram" id="instagram">
+                                <label class="form-check-label" for="instagram">Instagram</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="platforms" value="threads" id="threads">
+                                <label class="form-check-label" for="threads">Threads</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Button -->
+                    <button type="submit" class="btn btn-primary">Post</button>
+                </form>
+                
+                <!-- Status Message -->
+                <div id="status" class="status"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Image preview
+        document.getElementById('image').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = document.getElementById('imagePreview');
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Form submission
+        document.getElementById('postForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const status = document.getElementById('status');
+            
+            try {
+                const response = await fetch('/post', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    status.textContent = result.error;
+                    status.className = 'status error';
+                } else {
+                    let message = '';
+                    if (result.success.length > 0) {
+                        message = `Posted successfully to: ${result.success.join(', ')}`;
+                    }
+                    if (result.errors.length > 0) {
+                        message += (message ? '\n' : '') + `Errors: ${result.errors.join(', ')}`;
+                    }
+                    status.textContent = message;
+                    status.className = 'status ' + (result.errors.length > 0 ? 'error' : 'success');
+                }
+                
+                status.style.display = 'block';
+                
+            } catch (error) {
+                status.textContent = 'Error: ' + error.message;
+                status.className = 'status error';
+                status.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html> 

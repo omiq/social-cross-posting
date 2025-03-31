@@ -2,7 +2,6 @@ import ui
 import photos
 import tempfile
 import os
-from Image import Image
 from social_media_pythonista import SocialMediaPoster
 
 class SocialMediaUI:
@@ -85,17 +84,19 @@ class SocialMediaUI:
         """Handle image selection from photo library"""
         def handle_image(image):
             if image:
-                # Resize image if needed
-                max_size = (800, 800)
-                image.thumbnail(max_size)
+                # Get the image data
+                image_data = image.get_image()
                 
                 # Save to temporary file
                 temp_dir = tempfile.gettempdir()
                 temp_path = os.path.join(temp_dir, 'selected_image.jpg')
-                image.save(temp_path)
+                
+                # Save the image data
+                with open(temp_path, 'wb') as f:
+                    f.write(image_data)
                 
                 self.selected_image = temp_path
-                self.image_preview.image = ui.Image.from_data(image.tobytes())
+                self.image_preview.image = image
                 self.image_preview.hidden = False
                 
         photos.pick_image(handle_image)
