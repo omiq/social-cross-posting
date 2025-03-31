@@ -2,7 +2,7 @@ import ui
 import photos
 import tempfile
 import os
-from PIL import Image
+from Image import Image
 from social_media_pythonista import SocialMediaPoster
 
 class SocialMediaUI:
@@ -87,7 +87,7 @@ class SocialMediaUI:
             if image:
                 # Resize image if needed
                 max_size = (800, 800)
-                image.thumbnail(max_size, Image.Resampling.LANCZOS)
+                image.thumbnail(max_size)
                 
                 # Save to temporary file
                 temp_dir = tempfile.gettempdir()
