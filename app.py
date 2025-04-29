@@ -24,10 +24,10 @@ def post():
         if not text:
             return jsonify({'error': 'Please enter some text for your post'})
 
-        # Get selected platforms
-        platforms = request.form.getlist('platforms')
+        # Get selected platforms (only Bluesky and Mastodon)
+        platforms = [p for p in request.form.getlist('platforms') if p in ['bluesky', 'mastodon']]
         if not platforms:
-            return jsonify({'error': 'Please select at least one platform'})
+            return jsonify({'error': 'Please select at least one platform (Bluesky or Mastodon)'})
 
         results = {}
         

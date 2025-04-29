@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Social Media Poster</title>
+    <title>Social Media Cross-Poster</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -63,7 +63,8 @@
     <div class="container">
         <div class="card">
             <div class="card-body">
-                <h2 class="card-title mb-4">Social Media Poster</h2>
+                <h2 class="card-title mb-4">Social Media Cross-Poster</h2>
+                <p class="text-muted mb-4">Post to Bluesky and Mastodon simultaneously</p>
                 
                 <form id="postForm">
                     <!-- Text Input -->
@@ -97,37 +98,18 @@
                                 <input class="form-check-input" type="checkbox" name="platforms" value="mastodon" id="mastodon">
                                 <label class="form-check-label" for="mastodon">Mastodon</label>
                             </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="platforms" value="facebook" id="facebook">
-                                <label class="form-check-label" for="facebook">Facebook</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="platforms" value="linkedin" id="linkedin">
-                                <label class="form-check-label" for="linkedin">LinkedIn</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="platforms" value="instagram" id="instagram">
-                                <label class="form-check-label" for="instagram">Instagram</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="platforms" value="threads" id="threads">
-                                <label class="form-check-label" for="threads">Threads</label>
-                            </div>
                         </div>
                     </div>
                     
-                    <!-- Submit Button -->
                     <button type="submit" class="btn btn-primary">Post</button>
                 </form>
                 
-                <!-- Status Message -->
                 <div id="status" class="status"></div>
             </div>
         </div>
     </div>
 
     <script>
-        // Image preview
         document.getElementById('image').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
@@ -141,7 +123,6 @@
             }
         });
 
-        // Form submission
         document.getElementById('postForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -157,25 +138,25 @@
                 const result = await response.json();
                 
                 if (result.error) {
-                    status.textContent = result.error;
                     status.className = 'status error';
+                    status.textContent = result.error;
                 } else {
                     let message = '';
                     if (result.success.length > 0) {
-                        message = `Posted successfully to: ${result.success.join(', ')}`;
+                        message += `Successfully posted to: ${result.success.join(', ')}\n`;
                     }
                     if (result.errors.length > 0) {
-                        message += (message ? '\n' : '') + `Errors: ${result.errors.join(', ')}`;
+                        message += `Errors: ${result.errors.join('\n')}`;
                     }
-                    status.textContent = message;
+                    
                     status.className = 'status ' + (result.errors.length > 0 ? 'error' : 'success');
+                    status.textContent = message;
                 }
                 
                 status.style.display = 'block';
-                
             } catch (error) {
-                status.textContent = 'Error: ' + error.message;
                 status.className = 'status error';
+                status.textContent = 'An error occurred while posting';
                 status.style.display = 'block';
             }
         });
