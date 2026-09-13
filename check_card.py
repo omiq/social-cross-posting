@@ -2,40 +2,39 @@
 
 Runs everything post_link does for Bluesky (read the og: tags, upload the
 thumbnail, build the embed) and stops before send_post, so it can be run
-against a live URL safely.
+against a live URL safely. Pass an image to check a card built with your own
+picture instead of the page's.
 
-    python3 check_card.py https://example.com/article
+    python3 check_card.py https://example.com/article [image.jpg]
 """
 import sys
 
 import requests
 from atproto import models
-from bs4 import BeautifulSoup
 
 from social_media import SocialMediaPoster
 
 
-def main(url):
+def main(url, image_path=None):
     poster = SocialMediaPoster()
     client = poster.clients.get('bluesky')
     if client is None:
         print("Bluesky client did not initialise, check BLUESKY_* in .env")
         return 1
 
-    soup = BeautifulSoup(requests.get(url, timeout=20).text, 'html.parser')
-
-    def og(name, fallback=''):
-        tag = soup.find('meta', property=name)
-        return tag.get('content', fallback) if tag else fallback
-
-    title, description, image_url = og('og:title', url), og('og:description'), og('og:image')
+    title, description, image_url = poster._scrape_card(url)
     print(f"title:       {title!r}")
     print(f"description: {description[:80]!r}")
     print(f"image:       {image_url or 'none'}")
 
+    if image_path:
+        image_data = poster._resize_image(image_path, max_size_kb=900)
+        print(f"override:    {image_path}, {len(image_data)} bytes after re-encoding")
+    else:
+        image_data = requests.get(image_url, timeout=20).content if image_url else None
+
     thumb_blob = None
-    if image_url:
-        image_data = requests.get(image_url, timeout=20).content
+    if image_data:
         thumb_blob = client.upload_blob(image_data).blob
         print(f"thumb:       uploaded {len(image_data)} bytes, {thumb_blob.mime_type}")
 
@@ -49,7 +48,7 @@ def main(url):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 3):
         print(__doc__)
         raise SystemExit(2)
-    raise SystemExit(main(sys.argv[1]))
+    raise SystemExit(main(*sys.argv[1:]))

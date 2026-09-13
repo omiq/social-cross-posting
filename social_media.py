@@ -177,39 +177,64 @@ class SocialMediaPoster:
                 
         return results
 
-    def post_link(self, text: str, url: str, platforms: Optional[List[str]] = None) -> Dict[str, Any]:
-        """Post link with text to specified platforms"""
+    def _scrape_card(self, url: str) -> tuple:
+        """Title, description and image URL from a page's og: tags.
+
+        Any of the three can be missing, so read them defensively: indexing
+        straight off the soup raises TypeError on a page without them.
+        """
+        soup = BeautifulSoup(requests.get(url, timeout=20).text, 'html.parser')
+
+        def og(name, fallback=''):
+            tag = soup.find('meta', property=name)
+            return tag.get('content', fallback) if tag else fallback
+
+        return og('og:title', url), og('og:description'), og('og:image')
+
+    def post_link(self, text: str, url: str, platforms: Optional[List[str]] = None,
+                  title: Optional[str] = None, description: Optional[str] = None,
+                  image_path: Optional[str] = None) -> Dict[str, Any]:
+        """Post link with text to specified platforms.
+
+        title, description and image_path override what the target page says
+        about itself on the Bluesky card, which is worth doing when the page
+        describes something bigger than the thing being posted: a single story
+        inside a round-up video, where the page's own og: tags are the whole
+        video's title and the channel's boilerplate. Anything not passed is
+        scraped as before. Mastodon builds its own card by crawling the URL and
+        takes no say from us, so these do not reach it.
+        """
         if platforms is None:
             platforms = list(self.clients.keys())
-            
+
         results = {}
-        
+
         for platform in platforms:
             try:
                 if platform == 'bluesky':
                     from atproto import models
 
-                    # Get link preview data
-                    response = requests.get(url, timeout=20)
-                    soup = BeautifulSoup(response.text, 'html.parser')
+                    image_data = None
+                    if image_path:
+                        # Re-encodes, so an oversized still cannot blow the
+                        # ~976KB blob limit.
+                        image_data = self._resize_image(image_path, max_size_kb=900)
 
-                    # Not every page carries og: tags, and indexing a missing
-                    # one raises TypeError, which failed the whole post.
-                    def og(name, fallback=''):
-                        tag = soup.find('meta', property=name)
-                        return tag.get('content', fallback) if tag else fallback
-
-                    title = og('og:title', url)
-                    description = og('og:description')
-                    image_url = og('og:image')
+                    if title is None or description is None or image_data is None:
+                        scraped_title, scraped_description, image_url = self._scrape_card(url)
+                        if title is None:
+                            title = scraped_title
+                        if description is None:
+                            description = scraped_description
+                        if image_data is None and image_url:
+                            image_data = requests.get(image_url, timeout=20).content
 
                     # The image has to be uploaded as a blob and the embed has
                     # to be a typed model. Passing a plain dict with raw bytes
                     # fails validation with "Unable to extract tag using
                     # discriminator 'py_type'", which is what used to happen.
                     thumb_blob = None
-                    if image_url:
-                        image_data = requests.get(image_url, timeout=20).content
+                    if image_data:
                         thumb_blob = self.clients['bluesky'].upload_blob(image_data).blob
 
                     embed_external = models.AppBskyEmbedExternal.Main(
@@ -224,5 +249,5 @@ class SocialMediaPoster:
                     results['mastodon'] = self.clients['mastodon'].toot(f"{text}\n\n{url}")
             except Exception as e:
                 results[platform] = {'error': str(e)}
-                
-        return results 
+
+        return results
