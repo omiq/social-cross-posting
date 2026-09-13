@@ -187,30 +187,38 @@ class SocialMediaPoster:
         for platform in platforms:
             try:
                 if platform == 'bluesky':
+                    from atproto import models
+
                     # Get link preview data
-                    response = requests.get(url)
+                    response = requests.get(url, timeout=20)
                     soup = BeautifulSoup(response.text, 'html.parser')
-                    
-                    # Extract metadata
-                    title = soup.find('meta', property='og:title')['content']
-                    description = soup.find('meta', property='og:description')['content']
-                    image_url = soup.find('meta', property='og:image')['content']
-                    
-                    # Download and upload image
-                    image_data = requests.get(image_url).content
-                    
-                    # Create link card
+
+                    # Not every page carries og: tags, and indexing a missing
+                    # one raises TypeError, which failed the whole post.
+                    def og(name, fallback=''):
+                        tag = soup.find('meta', property=name)
+                        return tag.get('content', fallback) if tag else fallback
+
+                    title = og('og:title', url)
+                    description = og('og:description')
+                    image_url = og('og:image')
+
+                    # The image has to be uploaded as a blob and the embed has
+                    # to be a typed model. Passing a plain dict with raw bytes
+                    # fails validation with "Unable to extract tag using
+                    # discriminator 'py_type'", which is what used to happen.
+                    thumb_blob = None
+                    if image_url:
+                        image_data = requests.get(image_url, timeout=20).content
+                        thumb_blob = self.clients['bluesky'].upload_blob(image_data).blob
+
+                    embed_external = models.AppBskyEmbedExternal.Main(
+                        external=models.AppBskyEmbedExternal.External(
+                            title=title, description=description, uri=url, thumb=thumb_blob
+                        )
+                    )
                     results['bluesky'] = self.clients['bluesky'].send_post(
-                        text=text,
-                        embed={
-                            'type': 'app.bsky.embed.external',
-                            'external': {
-                                'uri': url,
-                                'title': title,
-                                'description': description,
-                                'thumb': image_data
-                            }
-                        }
+                        text=text, embed=embed_external
                     )
                 elif platform == 'mastodon':
                     results['mastodon'] = self.clients['mastodon'].toot(f"{text}\n\n{url}")
