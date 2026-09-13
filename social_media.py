@@ -193,8 +193,14 @@ class SocialMediaPoster:
 
     def post_link(self, text: str, url: str, platforms: Optional[List[str]] = None,
                   title: Optional[str] = None, description: Optional[str] = None,
-                  image_path: Optional[str] = None) -> Dict[str, Any]:
+                  image_path: Optional[str] = None,
+                  image_url: Optional[str] = None) -> Dict[str, Any]:
         """Post link with text to specified platforms.
+
+        The picture can come from a local file (image_path, a grabbed video
+        still) or from the web (image_url, a better picture found inside the
+        article than the one its feed offered). image_path wins if both are
+        given; neither means the page's own og:image.
 
         title, description and image_path override what the target page says
         about itself on the Bluesky card, which is worth doing when the page
@@ -219,15 +225,17 @@ class SocialMediaPoster:
                         # Re-encodes, so an oversized still cannot blow the
                         # ~976KB blob limit.
                         image_data = self._resize_image(image_path, max_size_kb=900)
+                    elif image_url:
+                        image_data = requests.get(image_url, timeout=20).content
 
                     if title is None or description is None or image_data is None:
-                        scraped_title, scraped_description, image_url = self._scrape_card(url)
+                        scraped_title, scraped_description, scraped_image = self._scrape_card(url)
                         if title is None:
                             title = scraped_title
                         if description is None:
                             description = scraped_description
-                        if image_data is None and image_url:
-                            image_data = requests.get(image_url, timeout=20).content
+                        if image_data is None and scraped_image:
+                            image_data = requests.get(scraped_image, timeout=20).content
 
                     # The image has to be uploaded as a blob and the embed has
                     # to be a typed model. Passing a plain dict with raw bytes
