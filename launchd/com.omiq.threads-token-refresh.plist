@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Keeps the Threads access token alive. Tokens last 60 days and die quietly if
+  not refreshed, which would only show up as a failed post. Monthly leaves a
+  full month of slack, and a refresh is refused for a token under 24 hours old,
+  which a monthly run never hits.
+
+  python3 is given by absolute path: launchd runs with a PATH of
+  /usr/bin:/bin:/usr/sbin:/sbin, so a bare python3 would find the system one
+  without requests or python-dotenv installed.
+
+  Install:  cp launchd/com.omiq.threads-token-refresh.plist ~/Library/LaunchAgents/
+            launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.omiq.threads-token-refresh.plist
+  Test now: launchctl kickstart -p gui/$(id -u)/com.omiq.threads-token-refresh
+  Log:      ~/Library/Logs/threads-token-refresh.log
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.omiq.threads-token-refresh</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.10/bin/python3</string>
+        <string>/Users/chrisg/github/social-cross-posting/threads_token.py</string>
+        <string>refresh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/chrisg/github/social-cross-posting</string>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Day</key>
+        <integer>1</integer>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>15</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/chrisg/Library/Logs/threads-token-refresh.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/chrisg/Library/Logs/threads-token-refresh.log</string>
+</dict>
+</plist>

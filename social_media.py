@@ -11,6 +11,7 @@ from mastodon import Mastodon
 from dotenv import load_dotenv
 import mimetypes
 import logging
+import time
 
 # Load environment variables
 load_dotenv()
@@ -73,7 +74,18 @@ class SocialMediaPoster:
             print("✓ Mastodon client initialized successfully")
         except Exception as e:
             print(f"✗ Failed to initialize Mastodon client: {e}")
-            
+
+        # Threads. No SDK: a token and two HTTP calls. The token comes from
+        # threads_token.py and lasts 60 days unless refreshed.
+        try:
+            self.clients['threads'] = {
+                'token': self._get_env_var('THREADS_ACCESS_TOKEN'),
+                'user_id': self._get_env_var('THREADS_USER_ID'),
+            }
+            print("✓ Threads client initialized successfully")
+        except Exception as e:
+            print(f"✗ Failed to initialize Threads client: {e}")
+
         # Print summary of available platforms
         print("\n===== AVAILABLE PLATFORMS =====")
         for platform, client in self.clients.items():
@@ -191,6 +203,44 @@ class SocialMediaPoster:
 
         return og('og:title', url), og('og:description'), og('og:image')
 
+    def _threads_call(self, method: str, path: str, **fields) -> Dict[str, Any]:
+        """One Threads Graph call. Errors carry Meta's message, never the
+        request: its URL or body holds the access token, and an exception from
+        requests would put that in the result the picker shows."""
+        client = self.clients['threads']
+        fields['access_token'] = client['token']
+        url = f"https://graph.threads.net/v1.0/{path}"
+        if method == 'GET':
+            response = requests.get(url, params=fields, timeout=30)
+        else:
+            response = requests.post(url, data=fields, timeout=30)
+        if response.status_code != 200:
+            raise RuntimeError(f"Threads HTTP {response.status_code}: {response.text[:300]}")
+        return response.json()
+
+    def _post_threads(self, text: str) -> Dict[str, Any]:
+        """A text post. Threads builds its link preview from the first URL in
+        the text, the way Mastodon crawls its card, so there is no card to set.
+
+        Publishing is two steps, a container then a publish. Meta suggests
+        waiting about 30 seconds between them; polling the container's status
+        publishes as soon as it is ready instead of always waiting.
+        """
+        if len(text) > 500:
+            raise ValueError(f"Threads allows 500 characters and this is {len(text)}")
+        user_id = self.clients['threads']['user_id']
+        container = self._threads_call('POST', f"{user_id}/threads", media_type='TEXT', text=text)['id']
+
+        for _ in range(20):
+            state = self._threads_call('GET', container, fields='status,error_message')
+            if state.get('status') == 'FINISHED':
+                break
+            if state.get('status') in ('ERROR', 'EXPIRED'):
+                raise RuntimeError(f"Threads container {state['status']}: {state.get('error_message')}")
+            time.sleep(2)
+
+        return self._threads_call('POST', f"{user_id}/threads_publish", creation_id=container)
+
     def post_link(self, text: str, url: str, platforms: Optional[List[str]] = None,
                   title: Optional[str] = None, description: Optional[str] = None,
                   image_path: Optional[str] = None,
@@ -255,6 +305,8 @@ class SocialMediaPoster:
                     )
                 elif platform == 'mastodon':
                     results['mastodon'] = self.clients['mastodon'].toot(f"{text}\n\n{url}")
+                elif platform == 'threads':
+                    results['threads'] = self._post_threads(f"{text}\n\n{url}")
             except Exception as e:
                 results[platform] = {'error': str(e)}
 
