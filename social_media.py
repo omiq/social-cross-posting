@@ -218,7 +218,31 @@ class SocialMediaPoster:
             raise RuntimeError(f"Threads HTTP {response.status_code}: {response.text[:300]}")
         return response.json()
 
-    def _post_threads(self, text: str) -> Dict[str, Any]:
+    @staticmethod
+    def _threads_topic(text: str) -> tuple:
+        """Hashtags out of the text, the first one back as the post's topic.
+
+        Threads allows one topic per post. Written in the text, the first tag
+        becomes the topic and loses its hash, so "#retrogaming #retrocomputing"
+        printed as "retrogaming #retrocomputing", which reads as a typo. The
+        topic_tag field is Meta's preferred route, and it leaves the text clean.
+        Topics are 1 to 50 characters with no periods or ampersands.
+        """
+        import re
+        tag = r'(?<![\w#])#([A-Za-z][\w-]*)'
+        tags = re.findall(tag, text)
+        lines = []
+        for line in text.splitlines():
+            # A run of tags ending a line, or a line of nothing but tags, goes.
+            # A tag inside a sentence keeps its word: deleting it turned
+            # "Loving the #C64 scene" into "Loving the  scene".
+            line = re.sub(r'(?:\s*(?<![\w#])#[A-Za-z][\w-]*)+\s*$', '', line)
+            lines.append(re.sub(tag, r'\1', line).rstrip())
+        body = re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip()
+        topic = tags[0][:50] if tags else None
+        return body, topic
+
+    def _post_threads(self, text: str, topic: Optional[str] = None) -> Dict[str, Any]:
         """A text post. Threads builds its link preview from the first URL in
         the text, the way Mastodon crawls its card, so there is no card to set.
 
@@ -229,7 +253,10 @@ class SocialMediaPoster:
         if len(text) > 500:
             raise ValueError(f"Threads allows 500 characters and this is {len(text)}")
         user_id = self.clients['threads']['user_id']
-        container = self._threads_call('POST', f"{user_id}/threads", media_type='TEXT', text=text)['id']
+        fields = {'media_type': 'TEXT', 'text': text}
+        if topic:
+            fields['topic_tag'] = topic
+        container = self._threads_call('POST', f"{user_id}/threads", **fields)['id']
 
         for _ in range(20):
             state = self._threads_call('GET', container, fields='status,error_message')
@@ -306,7 +333,8 @@ class SocialMediaPoster:
                 elif platform == 'mastodon':
                     results['mastodon'] = self.clients['mastodon'].toot(f"{text}\n\n{url}")
                 elif platform == 'threads':
-                    results['threads'] = self._post_threads(f"{text}\n\n{url}")
+                    body, topic = self._threads_topic(text)
+                    results['threads'] = self._post_threads(f"{body}\n\n{url}", topic)
             except Exception as e:
                 results[platform] = {'error': str(e)}
 
