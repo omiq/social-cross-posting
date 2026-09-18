@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import requests
 from bs4 import BeautifulSoup
 from PIL import Image
@@ -16,6 +17,12 @@ import time
 # Load environment variables
 load_dotenv()
 
+# A Bluesky handle is dotted (adrian.bsky.social, adriansdigitalbasement.com),
+# so require a dot and let resolution decide the rest. The lookbehind keeps an
+# email address out of it: the @ in "me@example.com" follows a word character.
+MENTION = re.compile(rb'(?<![\w.@/-])@((?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,})')
+URL_IN_TEXT = re.compile(rb'https?://[^\s<>"\)\]]+')
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,6 +31,8 @@ class SocialMediaPoster:
     def __init__(self):
         """Initialize social media poster using environment variables"""
         self.clients = {}
+        # Handle -> DID, so a run that credits the same channel twice asks once.
+        self._dids: Dict[str, Optional[str]] = {}
         self._initialize_clients()
         
     def print_setup_guide(self):
@@ -136,7 +145,8 @@ class SocialMediaPoster:
         for platform in platforms:
             try:
                 if platform == 'bluesky':
-                    results['bluesky'] = self.clients['bluesky'].send_post(text=text)
+                    results['bluesky'] = self.clients['bluesky'].send_post(
+                        text=text, facets=self._facets(text))
                 elif platform == 'mastodon':
                     results['mastodon'] = self.clients['mastodon'].toot(text)
             except Exception as e:
@@ -170,6 +180,7 @@ class SocialMediaPoster:
                         text=text,
                         image=resized_image,
                         image_alt=alt_text,
+                        facets=self._facets(text),
                         image_aspect_ratio={'width': width, 'height': height}
                     )
                 elif platform == 'mastodon':
@@ -188,6 +199,61 @@ class SocialMediaPoster:
                 results[platform] = {'error': str(e)}
                 
         return results
+
+    def _resolve_handle(self, handle: str) -> Optional[str]:
+        """A Bluesky handle as the DID a mention has to carry. None if nobody
+        answers to it, which is how a typo stays plain text instead of tagging
+        a stranger."""
+        if handle in self._dids:
+            return self._dids[handle]
+        did = None
+        try:
+            did = self.clients['bluesky'].com.atproto.identity.resolve_handle(
+                {'handle': handle}).did
+        except Exception as e:
+            logger.info(f"bluesky handle {handle} did not resolve: {e}")
+        self._dids[handle] = did
+        return did
+
+    def _facets(self, text: str) -> List[Any]:
+        """Mentions and links in the text, marked up so Bluesky treats them as
+        mentions and links.
+
+        A plain string carries no markup of its own, so "@adrian.bsky.social"
+        posts as grey text: not a link, and no notification for the person
+        being credited. Mastodon and Threads resolve handles server-side and
+        need none of this.
+
+        The ranges are byte offsets into the UTF-8, not character positions:
+        an emoji earlier in the post shifts everything after it by three.
+        """
+        if 'bluesky' not in self.clients:
+            return []
+        from atproto import models
+
+        raw = text.encode('utf-8')
+        facets = []
+
+        for match in MENTION.finditer(raw):
+            did = self._resolve_handle(match.group(1).decode('utf-8'))
+            if not did:
+                continue
+            facets.append(models.AppBskyRichtextFacet.Main(
+                index=models.AppBskyRichtextFacet.ByteSlice(
+                    byteStart=match.start(), byteEnd=match.end()),
+                features=[models.AppBskyRichtextFacet.Mention(did=did)]))
+
+        for match in URL_IN_TEXT.finditer(raw):
+            found = match.group(0).decode('utf-8')
+            # Trailing punctuation belongs to the sentence, not the address.
+            trimmed = found.rstrip('.,;:!?')
+            facets.append(models.AppBskyRichtextFacet.Main(
+                index=models.AppBskyRichtextFacet.ByteSlice(
+                    byteStart=match.start(),
+                    byteEnd=match.start() + len(trimmed.encode('utf-8'))),
+                features=[models.AppBskyRichtextFacet.Link(uri=trimmed)]))
+
+        return facets
 
     def _scrape_card(self, url: str) -> tuple:
         """Title, description and image URL from a page's og: tags.
@@ -328,7 +394,7 @@ class SocialMediaPoster:
                         )
                     )
                     results['bluesky'] = self.clients['bluesky'].send_post(
-                        text=text, embed=embed_external
+                        text=text, embed=embed_external, facets=self._facets(text)
                     )
                 elif platform == 'mastodon':
                     results['mastodon'] = self.clients['mastodon'].toot(f"{text}\n\n{url}")

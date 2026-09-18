@@ -7,6 +7,9 @@ A Python library for posting content to multiple social media platforms includin
 - Post text content
 - Post images with captions
 - Post links with previews (where supported)
+- Real mentions and links on Bluesky: `@handle` in the text is resolved to a
+  DID and sent as a facet, so it tags the person and notifies them instead of
+  posting as grey text. A handle nobody answers to is left as plain text.
 - OAuth authentication support for Facebook and LinkedIn
 - Environment variable based configuration
 - Error handling for each platform
