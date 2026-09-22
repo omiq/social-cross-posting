@@ -54,6 +54,9 @@ class SocialMediaPoster:
         print("     MASTODON_ACCESS_TOKEN=your_access_token")
         print("     MASTODON_API_BASE_URL=https://your.instance.url")
         
+    # Platforms only posted to when named. Everything else is the default.
+    OPT_IN = {'facebook'}
+
     def _get_env_var(self, key: str) -> str:
         """Get environment variable or raise error if not set"""
         value = os.getenv(key)
@@ -94,6 +97,22 @@ class SocialMediaPoster:
             print("✓ Threads client initialized successfully")
         except Exception as e:
             print(f"✗ Failed to initialize Threads client: {e}")
+
+        # Facebook Page. Like Threads, a token and plain Graph calls. It needs a
+        # Page access token (pages_manage_posts), not a user token, and it is
+        # opt-in: left out of the default platform list, so a caller that says
+        # nothing about platforms never starts posting to the Page.
+        try:
+            page_id = self._get_env_var('FACEBOOK_PAGE_ID')
+            if not page_id.isdigit():
+                raise ValueError("FACEBOOK_PAGE_ID is not a numeric page id")
+            self.clients['facebook'] = {
+                'token': self._get_env_var('FACEBOOK_ACCESS_TOKEN'),
+                'page_id': page_id,
+            }
+            print("✓ Facebook Page client initialized successfully")
+        except Exception as e:
+            print(f"✗ Failed to initialize Facebook Page client: {e}")
 
         # Print summary of available platforms
         print("\n===== AVAILABLE PLATFORMS =====")
@@ -354,7 +373,7 @@ class SocialMediaPoster:
         takes no say from us, so these do not reach it.
         """
         if platforms is None:
-            platforms = list(self.clients.keys())
+            platforms = [p for p in self.clients if p not in self.OPT_IN]
 
         results = {}
 
@@ -401,7 +420,24 @@ class SocialMediaPoster:
                 elif platform == 'threads':
                     body, topic = self._threads_topic(text)
                     results['threads'] = self._post_threads(f"{body}\n\n{url}", topic)
+                elif platform == 'facebook':
+                    results['facebook'] = self._post_facebook(text, url)
             except Exception as e:
                 results[platform] = {'error': str(e)}
 
         return results
+
+    def _post_facebook(self, text: str, url: str) -> Dict[str, Any]:
+        """A link post on the Page. Facebook crawls the URL for its own card,
+        as Mastodon does. Errors carry Meta's message, never the request, which
+        holds the token."""
+        if 'facebook' not in self.clients:
+            raise RuntimeError("Facebook Page is not configured (FACEBOOK_PAGE_ID, FACEBOOK_ACCESS_TOKEN)")
+        client = self.clients['facebook']
+        response = requests.post(
+            f"https://graph.facebook.com/v21.0/{client['page_id']}/feed",
+            data={'message': text, 'link': url, 'access_token': client['token']},
+            timeout=30)
+        if response.status_code != 200:
+            raise RuntimeError(f"Facebook HTTP {response.status_code}: {response.text[:300]}")
+        return response.json()
