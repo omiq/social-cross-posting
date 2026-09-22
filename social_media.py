@@ -27,6 +27,10 @@ URL_IN_TEXT = re.compile(rb'https?://[^\s<>"\)\]]+')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+
+
 class SocialMediaPoster:
     def __init__(self):
         """Initialize social media poster using environment variables"""
@@ -280,7 +284,12 @@ class SocialMediaPoster:
         Any of the three can be missing, so read them defensively: indexing
         straight off the soup raises TypeError on a page without them.
         """
-        soup = BeautifulSoup(requests.get(url, timeout=20).text, 'html.parser')
+        # A browser's user agent: retrogamecoders.com answers requests' own
+        # "python-requests" with a 403 page that has no og: tags, and the
+        # Worth a Watch issue 01 card went out on Bluesky as a bare URL.
+        page = requests.get(url, timeout=20, headers={'User-Agent': BROWSER_UA})
+        page.raise_for_status()
+        soup = BeautifulSoup(page.text, 'html.parser')
 
         def og(name, fallback=''):
             tag = soup.find('meta', property=name)
