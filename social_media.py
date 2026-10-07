@@ -390,6 +390,7 @@ class SocialMediaPoster:
             try:
                 if platform == 'bluesky':
                     from atproto import models
+                    from atproto_client.namespaces.sync_ns import get_response_model
 
                     image_data = None
                     if image_path:
@@ -397,7 +398,8 @@ class SocialMediaPoster:
                         # ~976KB blob limit.
                         image_data = self._resize_image(image_path, max_size_kb=900)
                     elif image_url:
-                        image_data = requests.get(image_url, timeout=20).content
+                        image_data = self._resize_image(
+                            BytesIO(requests.get(image_url, timeout=20).content), max_size_kb=900)
 
                     if title is None or description is None or image_data is None:
                         scraped_title, scraped_description, scraped_image = self._scrape_card(url)
@@ -406,7 +408,8 @@ class SocialMediaPoster:
                         if description is None:
                             description = scraped_description
                         if image_data is None and scraped_image:
-                            image_data = requests.get(scraped_image, timeout=20).content
+                            image_data = self._resize_image(
+                                BytesIO(requests.get(scraped_image, timeout=20).content), max_size_kb=900)
 
                     # The image has to be uploaded as a blob and the embed has
                     # to be a typed model. Passing a plain dict with raw bytes
@@ -414,7 +417,15 @@ class SocialMediaPoster:
                     # discriminator 'py_type'", which is what used to happen.
                     thumb_blob = None
                     if image_data:
-                        thumb_blob = self.clients['bluesky'].upload_blob(image_data).blob
+                        # upload_blob declares every blob as */*, and Bluesky now
+                        # stores that instead of sniffing the bytes, so the post is
+                        # refused with 'Expected "image/*"'. Every path above ends
+                        # in _resize_image, which always writes JPEG.
+                        response = self.clients['bluesky'].invoke_procedure(
+                            'com.atproto.repo.uploadBlob', data=image_data,
+                            input_encoding='image/jpeg', output_encoding='application/json')
+                        thumb_blob = get_response_model(
+                            response, models.ComAtprotoRepoUploadBlob.Response).blob
 
                     embed_external = models.AppBskyEmbedExternal.Main(
                         external=models.AppBskyEmbedExternal.External(
