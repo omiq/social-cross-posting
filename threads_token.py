@@ -2,10 +2,12 @@
 """Get and keep a Threads access token for posting.
 
     python3 threads_token.py login     # once: approve in the browser, store a 60-day token
-    python3 threads_token.py adopt     # or: after pasting a dashboard-generated token into .env
+    python3 threads_token.py adopt     # or: with a dashboard-generated token on the clipboard (or in .env)
     python3 threads_token.py refresh   # keep it alive: run monthly
 
 The token and user id are written to .env beside this file and never printed.
+For a second brand, put SOCIAL_ENV=.env.makerhacks in front and they go to
+that file instead; the app id and secret are still read from .env.
 Threads tokens expire after 60 days unless refreshed, and a refresh is refused
 until a token is at least 24 hours old, so refresh on a schedule rather than
 waiting for a post to fail.
@@ -14,9 +16,11 @@ The redirect URI must match one listed in the app's Threads settings exactly.
 It defaults to https://localhost/threads-callback; set THREADS_REDIRECT_URI in
 .env to use another.
 """
+import subprocess
 import sys
 import time
 import urllib.parse
+import os
 import webbrowser
 from pathlib import Path
 
@@ -24,13 +28,18 @@ import requests
 from dotenv import dotenv_values
 
 HERE = Path(__file__).resolve().parent
-ENV = HERE / ".env"
+BASE = HERE / ".env"
+# SOCIAL_ENV=.env.makerhacks points the token helpers at a second brand's file.
+ENV = HERE / os.environ.get("SOCIAL_ENV", ".env")
 SCOPES = "threads_basic,threads_content_publish"
 DEFAULT_REDIRECT = "https://localhost/threads-callback"
 
 
 def settings():
-    values = dotenv_values(ENV)
+    # The app id and secret are shared, so they can stay in the main .env.
+    # A blank line in the brand's file still wins, so one brand's token is
+    # never picked up for another.
+    values = {**dotenv_values(BASE), **dotenv_values(ENV)}
     missing = [key for key in ("THREADS_APP_ID", "THREADS_APP_SECRET") if not values.get(key)]
     if missing:
         sys.exit(f"missing from {ENV}: {', '.join(missing)}")
@@ -123,7 +132,13 @@ def adopt():
     env = dotenv_values(ENV)
     token = env.get("THREADS_ACCESS_TOKEN")
     if not token:
-        sys.exit(f"paste the generated token into {ENV.name} as THREADS_ACCESS_TOKEN first")
+        # Straight from the generator's copy button, so the token never has to
+        # be typed or shown. Threads tokens start with TH.
+        token = subprocess.run(["pbpaste"], capture_output=True, text=True).stdout.strip()
+        if not token.startswith("TH") or " " in token:
+            sys.exit(f"no Threads token on the clipboard or in {ENV.name}: copy it from the "
+                     "User Token Generator and run this again")
+        save({"THREADS_ACCESS_TOKEN": token})
     me = check(requests.get("https://graph.threads.net/v1.0/me", params={
         "fields": "id,username",
         "access_token": token,

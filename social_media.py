@@ -17,6 +17,17 @@ import time
 # Load environment variables
 load_dotenv()
 
+# A second brand sits in its own file beside .env (say .env.makerhacks) and is
+# picked with SOCIAL_ENV=.env.makerhacks. Its lines replace the matching ones
+# from .env, and it blanks the platforms that brand has no account on, so a
+# post can never land on the other brand's page by default.
+_OVERLAY = os.environ.get("SOCIAL_ENV")
+if _OVERLAY:
+    _overlay_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), _OVERLAY)
+    if not os.path.exists(_overlay_path):
+        raise FileNotFoundError(f"SOCIAL_ENV names {_overlay_path}, which does not exist")
+    load_dotenv(_overlay_path, override=True)
+
 # A Bluesky handle is dotted (adrian.bsky.social, adriansdigitalbasement.com),
 # so require a dot and let resolution decide the rest. The lookbehind keeps an
 # email address out of it: the @ in "me@example.com" follows a word character.

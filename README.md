@@ -111,6 +111,22 @@ poster.post_link(
 )
 ```
 
+## A second brand
+
+Settings for another brand go in their own file beside `.env`, for example
+`.env.makerhacks`, holding only the lines that differ. Pick it with
+`SOCIAL_ENV`:
+
+```
+SOCIAL_ENV=.env.makerhacks python3 facebook_token.py --page "Maker"
+SOCIAL_ENV=.env.makerhacks python3 threads_token.py adopt
+```
+
+Its lines replace the matching ones from `.env`. Leave a platform's lines in
+it blank and that platform is off for that brand, so a post cannot go out
+through the other brand's account. The app ids and secrets are shared and
+stay in `.env`. `.env.*` files are ignored by git.
+
 ## Security Notes
 
 1. Never commit your `.env` file to version control

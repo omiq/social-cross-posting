@@ -23,13 +23,14 @@ import sys
 import requests
 from dotenv import dotenv_values
 
-from threads_token import ENV, check, save
+from threads_token import BASE, ENV, check, save
 
 GRAPH = "https://graph.facebook.com/v21.0"
 
 
 def main():
-    values = dotenv_values(ENV)
+    # The app id and secret are shared, so they can stay in the main .env.
+    values = {**dotenv_values(BASE), **dotenv_values(ENV)}
     missing = [k for k in ("FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET") if not values.get(k)]
     if missing:
         sys.exit(f"missing from {ENV}: {', '.join(missing)} (the app's Settings > Basic)")
@@ -70,8 +71,10 @@ def main():
     choice = matches[0]
 
     save({"FACEBOOK_PAGE_ID": choice["id"], "FACEBOOK_ACCESS_TOKEN": choice["access_token"]})
-    ENV.write_text("".join(line for line in ENV.read_text().splitlines(keepends=True)
-                           if not line.startswith("FACEBOOK_USER_TOKEN=")))
+    for path in {BASE, ENV}:
+        if path.exists():
+            path.write_text("".join(line for line in path.read_text().splitlines(keepends=True)
+                                    if not line.startswith("FACEBOOK_USER_TOKEN=")))
     print(f"saved the Page token for {choice['name']} to {ENV}")
 
 
